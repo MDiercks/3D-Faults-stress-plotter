@@ -1,5 +1,14 @@
 %This code is triggered by the "Calc cumulative stress" menu in the stress_plotter2.
 
+%check import:
+if isempty(app.coul_dir)
+    errordlg('No Coulomb files imported!')
+    return
+elseif isempty(app.fault_dir)
+    errordlg('No fault geometry imported!')
+    return
+end
+
 %read the coulomb files
 coulomb_files = dir(app.coul_dir);
 coul_data = {coulomb_files.name};
@@ -15,7 +24,7 @@ cum_stress.coulomb = zeros(length(cum_stress.id),1);
 if app.interseismicCB.Value == true
     backslip_data = readtable(fullfile(app.interseis_file),'Delimiter',',','HeaderLines',2,'ReadVariableNames',false);
     annual_stress = (table2array(backslip_data(:,18)))/10; %converted to MPa
-    event_dates = [app.startdateSp.Value;EventTable.Data.Year;app.enddateSp.Value];
+    event_dates = [app.startdateSp.Value;app.EventTable.Data.Year;app.enddateSp.Value];
     if app.startdateSp.Value > event_dates(1) || app.enddateSp.Value < event_dates(end)
         errordlg('Incorrect start or end date');
         return
@@ -39,7 +48,7 @@ for i = 1:n_faults
         geometry(f_idx(1):f_idx(1)+size(xyz,1)-1,2:15) = xyz;
         geometry(f_idx(1):f_idx(1)+size(xyz,1)-1,1) = i;
         idx(i) = i;
-        app.FaultTable.Data.fault(i) = fault_name;
+        %app.FaultTable.Data.fault(i) = fault_name;
     end
 end
 geometry(isnan(geometry(:,2)),:) = [];
@@ -95,14 +104,17 @@ for i = 1:size(combs,1)
     total_stress = app.prestressSp.Value; %mean stress on entire network
     stress_change = zeros(length(combination),1);
 %    stressed_elem = 0; slipped_elem = 1; avg_stress = 1; stress_change = 1; s_prev = 0; s_drop = 0; %pre-allocate metrics vars
-%    cum_stress.coulomb(:,:) = prestress_sp.Value; %stress at start
-stress_evo = zeros(app.enddateSp.Value-app.startdateSp.Value+1,n_faults+2); %track stress evolution on faults  
+    cum_stress.coulomb(:,:) = app.prestressSp.Value; %stress at start
+    stress_evo = zeros(app.enddateSp.Value-app.startdateSp.Value+1,n_faults+2); %track stress evolution on faults  
     
+    single_event_stats = nan(nnz(app.EventTable.Data.Plot),4); %saves year, mean, min, max stress on rupture plane for each event
     %loop going from start to end date, accumulating stress
-    for yr = app.startdateSp.Value:app.enddateSp.Value
+    count_events = 0;
+    for yr = round(app.startdateSp.Value):round(app.enddateSp.Value)
         %coseismic
         current_events = find(event_list.Year == yr);
         if ~isempty(current_events)
+            count_events = count_events + 1;
             list_events = find(app.EventTable.Data.Year == yr);
             sel = app.EventTable.Data.Event(list_events);
             event_row = find(strcmp(app.EventTable.Data.Event,sel(combination(combcounter))));
@@ -116,7 +128,11 @@ stress_evo = zeros(app.enddateSp.Value-app.startdateSp.Value+1,n_faults+2); %tra
             dipslip_idx = T.dipslip ~= 0; 
             latslip_idx = T.latslip ~= 0;
             source_idx = find((latslip_idx+dipslip_idx) > 0); %indices of patches that slipped
-            
+
+            %save single event metrics:
+            single_event_stats(count_events,:) = [yr,mean(cum_stress.coulomb(source_idx)),min(cum_stress.coulomb(source_idx)),max(cum_stress.coulomb(source_idx))];
+            writematrix(single_event_stats,strcat('Output_files/single_event_stats_',num2str(i),'.csv'))
+
             rupture_stress(r_idx:r_idx+numel(source_idx)-1) = cum_stress.coulomb(source_idx);
             r_idx = r_idx+numel(source_idx);
             
