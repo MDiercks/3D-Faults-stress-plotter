@@ -1,4 +1,5 @@
 %This code is triggered by the "Calc cumulative stress" menu in the stress_plotter2.
+delete('Output_files/*')
 
 %check import:
 if isempty(app.coul_dir)
@@ -107,9 +108,10 @@ for i = 1:size(combs,1)
     cum_stress.coulomb(:,:) = app.prestressSp.Value; %stress at start
     stress_evo = zeros(app.enddateSp.Value-app.startdateSp.Value+1,n_faults+2); %track stress evolution on faults  
     
-    single_event_stats = nan(nnz(app.EventTable.Data.Plot),4); %saves year, mean, min, max stress on rupture plane for each event
+    single_event_stats = nan(nnz(app.EventTable.Data.Plot),7); %saves year, mean, min, max stress on rupture plane, and percentage of elements >0, 0.1, 0.5 MPa for each event
     %loop going from start to end date, accumulating stress
     count_events = 0;
+    source_CST_total = nan(1000,1);
     for yr = round(app.startdateSp.Value):round(app.enddateSp.Value)
         %coseismic
         current_events = find(event_list.Year == yr);
@@ -130,8 +132,18 @@ for i = 1:size(combs,1)
             source_idx = find((latslip_idx+dipslip_idx) > 0); %indices of patches that slipped
 
             %save single event metrics:
-            single_event_stats(count_events,:) = [yr,mean(cum_stress.coulomb(source_idx)),min(cum_stress.coulomb(source_idx)),max(cum_stress.coulomb(source_idx))];
+            elem_pos = nnz(cum_stress.coulomb(source_idx) > 0)/nnz(cum_stress.coulomb(source_idx))*100; %percentage of positively stressed elements for individual events
+            elem_01 = nnz(cum_stress.coulomb(source_idx) > 0.1)/nnz(cum_stress.coulomb(source_idx))*100; %percentage of fault elements > 0.1 MPa
+            elem_05 = nnz(cum_stress.coulomb(source_idx) > 0.5)/nnz(cum_stress.coulomb(source_idx))*100; %percentage of fault elements > 0.5 MPa
+            single_event_stats(count_events,:) = [yr,mean(cum_stress.coulomb(source_idx)),min(cum_stress.coulomb(source_idx)),max(cum_stress.coulomb(source_idx)),elem_pos,elem_01,elem_05];
             writematrix(single_event_stats,strcat('Output_files/single_event_stats_',num2str(i),'.csv'))
+
+            %save cumulative CST on source fault prior to rupture
+            source_CST = cum_stress.coulomb(source_idx);
+            source_CST = [yr;source_CST]; %#ok<AGROW>
+            source_CST(numel(source_CST)+1:size(source_CST_total,1)) = NaN;
+            source_CST_total = [source_CST_total,source_CST]; %#ok<AGROW>
+            %writematrix(source_CST,strcat('Output_files/source_fault_CST_',sel(combination(combcounter)),'.csv'))
 
             rupture_stress(r_idx:r_idx+numel(source_idx)-1) = cum_stress.coulomb(source_idx);
             r_idx = r_idx+numel(source_idx);
@@ -150,7 +162,7 @@ for i = 1:size(combs,1)
             % if rb_zero_sd.Value == false %&& sum(T.el_rake_coul) > 0 %exclude empty events (zero stress change)
             %     cum_stress = stress_drop(cum_stress,source_idx,geometry,meandrop_sp); %use bull's eye stress drop fcn
             % elseif rb_zero_sd.Value == true %&& sum(T.el_rake_coul) > 0
-                cum_stress.coulomb(source_idx) = 0; %set stress to 0 for slipped segments
+            cum_stress.coulomb(source_idx) = 0; %set stress to 0 for slipped segments
             % end
 %            s_drop = (slipped_elem_old*s_drop + numel(source_idx)*(s_prev - mean(cum_stress.coulomb(source_idx))))/slipped_elem;
             
@@ -172,7 +184,7 @@ for i = 1:size(combs,1)
 
         %decide what to plot and export:
         switch app.ExpFigDD.Value
-            case 'annualy'
+            case 'annually'
                 exp_fig = true;
                 stress_plot(app.FaultTable.Data,geometry,cum_stress,app.plot3dCB,yr,i,exp_fig,app.plotdateCB,app.colormapDD)
             case 'after each event'
@@ -217,7 +229,6 @@ for i = 1:size(combs,1)
     % evotable.Properties.VariableNames = titles;
     % writetable(evotable,strcat('Output_files\stress_evolution_',no,'.csv'))
     stress_stats(:,i) = cum_stress.coulomb; %save final stress state of each combination
-    
 end
 stress_plot(app.FaultTable.Data,geometry,cum_stress,app.plot3dCB,yr,i,exp_fig,app.plotdateCB,app.colormapDD)
 metrics_data = table(comb_safe,metrics(:,1),metrics(:,2),metrics(:,3),metrics(:,4),metrics(:,5),metrics(:,6),metrics(:,7));
@@ -225,6 +236,10 @@ metrics_data.Properties.VariableNames = {'combination','stress00','stress01','st
 writetable(metrics_data,'Output_files\evaluation_metrics.csv')
 clearvars current_events event_row i idx j n n_faults no stress_evo
 
+%save CST on source faults prior to rupture:
+source_CST_total(:,1) = [];
+writematrix(source_CST_total,'Output_files/source_fault_CST.csv')
+
 %save variables needed for evaluation code
-save('stress_stats.mat',"stress_stats")
-save('cum_stress.mat',"cum_stress")
+save('Output_files/stress_stats.mat',"stress_stats")
+save('Output_files/cum_stress.mat',"cum_stress")

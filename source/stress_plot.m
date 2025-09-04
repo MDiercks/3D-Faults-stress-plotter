@@ -4,7 +4,8 @@ function stress_plot(FaultTable,geometry,cum_stress,plot3dCB,yr,i,exp_fig,plotda
     figure(3)
     clf(figure(3))
     gcf = figure(3);
-    set(gcf,'WindowState','maximized','Color',[1 1 1])
+    % set(gcf,'WindowState','maximized','Color',[1 1 1])
+    set(gcf,'Position', [100, 100, 1200, 600]);
     hold on
     for j = 1:length(FaultTable.idx)
         fault_name = FaultTable.fault_names{j};
@@ -43,7 +44,7 @@ function stress_plot(FaultTable,geometry,cum_stress,plot3dCB,yr,i,exp_fig,plotda
             set(gca,'Color',[.8 .8 .8]);
     end
     
-    cb = colorbar('north');
+    cb = colorbar('northoutside');
     clim(colorbar_limits)
         
     title(cb,'Coulomb stress on faults (MPa)','FontSize',14);
@@ -51,7 +52,7 @@ function stress_plot(FaultTable,geometry,cum_stress,plot3dCB,yr,i,exp_fig,plotda
     ylabel('UTM y')
     zlabel('Depth (m)')
     if plotdateCB.Value == true
-        annotation(figure(3),'textbox',[.15 .7 .1 .08],'String',num2str(yr),'FontSize',22,'FontWeight','bold','FitBoxToText','on');
+        annotation(figure(3),'textbox',[.2 .70 .045 .05],'String',num2str(yr),'FontSize',16,'FontWeight','bold','FitBoxToText','off');
     end
     hold off
     if exp_fig == true
